@@ -1,0 +1,342 @@
+openapi: 3.0.3
+info:
+  title: CryptoBox API
+  version: 1.0.0
+  description: >-
+    Classical Caesar, monoalphabetic substitution, and columnar transposition
+    ciphers. Messages contain uppercase A-Z letters only. Send requests as JSON.
+servers:
+  - url: /
+paths:
+  /api/solve:
+    post:
+      operationId: solveLayeredMessage
+      summary: Decrypt a substitution → transposition → Caesar message
+      description: >-
+        Removes the layers in reverse order. If caesarKey is omitted, tries
+        keys 1 through 25 and returns every candidate; select the readable
+        plaintext. If caesarKey is provided, returns only that key's result.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SolveInput'
+            example:
+              message: GOACJIPIUE
+              substitutionKey: JVYBLAMGESONHUTKZPRDXCQWFI
+              transpositionKey: TABLE
+      responses:
+        '200':
+          description: Plaintext candidates indexed by Caesar key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SolveResponse'
+              example:
+                candidates:
+                  - caesarKey: 11
+                    plaintext: ABRICOTS
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /api/caesar/encrypt:
+    post:
+      operationId: encryptCaesar
+      summary: Encrypt with the Caesar cipher
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CaesarInput'
+            example:
+              message: BONJOUR
+              key: 3
+      responses:
+        '200':
+          description: Encrypted message
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+              example:
+                result: ERQMRXU
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /health:
+    get:
+      operationId: healthCheck
+      summary: Check backend availability
+      responses:
+        '200':
+          description: Backend is running
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    enum: [ok]
+  /api/caesar/decrypt:
+    post:
+      operationId: decryptCaesar
+      summary: Decrypt with the Caesar cipher
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CaesarInput'
+            example:
+              message: ERQMRXU
+              key: 3
+      responses:
+        '200':
+          description: Decrypted message
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /api/caesar/bruteforce:
+    post:
+      operationId: bruteForceCaesar
+      summary: Try all 25 non-identity Caesar keys
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MessageInput'
+            example:
+              message: ERQMRXU
+      responses:
+        '200':
+          description: Decryption candidate for each key from 1 through 25
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CaesarCandidate'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /api/substitution/encrypt:
+    post:
+      operationId: encryptSubstitution
+      summary: Encrypt with a 26-letter substitution alphabet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubstitutionInput'
+            example:
+              message: ATTAQUE
+              key: QWERTYUIOPASDFGHJKLZXCVBNM
+      responses:
+        '200':
+          description: Encrypted message
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+              example:
+                result: QZZQJXT
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /api/substitution/decrypt:
+    post:
+      operationId: decryptSubstitution
+      summary: Decrypt with a 26-letter substitution alphabet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubstitutionInput'
+      responses:
+        '200':
+          description: Decrypted message
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /api/transposition/encrypt:
+    post:
+      operationId: encryptTransposition
+      summary: Encrypt with columnar transposition
+      description: The final row is padded with X when needed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TranspositionInput'
+            example:
+              message: RENDEZVOUSAMIDI
+              key: PORTE
+      responses:
+        '200':
+          description: Encrypted message
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+              example:
+                result: ESIEVMRZANOIDUD
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /api/transposition/decrypt:
+    post:
+      operationId: decryptTransposition
+      summary: Decrypt with columnar transposition
+      description: >-
+        If originalLength is omitted, up to key-length minus one trailing X
+        characters are removed as padding. Provide originalLength to preserve
+        literal trailing X characters exactly.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TranspositionDecryptInput'
+            example:
+              message: ESIEVMRZANOIDUD
+              key: PORTE
+              originalLength: 15
+      responses:
+        '200':
+          description: Decrypted message
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+components:
+  schemas:
+    MessageInput:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+          pattern: '^[A-Z]*$'
+          description: Uppercase A-Z letters only; the empty string is allowed.
+    SolveInput:
+      type: object
+      required: [message, substitutionKey, transpositionKey]
+      properties:
+        message:
+          type: string
+          pattern: '^[A-Z]*$'
+          example: GOACJIPIUE
+        substitutionKey:
+          type: string
+          minLength: 26
+          maxLength: 26
+          pattern: '^[A-Z]{26}$'
+          example: JVYBLAMGESONHUTKZPRDXCQWFI
+        transpositionKey:
+          type: string
+          minLength: 1
+          pattern: '^[A-Z]+$'
+          example: TABLE
+        caesarKey:
+          type: integer
+          description: Optional Caesar key; omit to brute-force keys 1 through 25.
+    SolveResponse:
+      type: object
+      required: [candidates]
+      properties:
+        candidates:
+          type: array
+          items:
+            type: object
+            required: [caesarKey, plaintext]
+            properties:
+              caesarKey:
+                type: integer
+              plaintext:
+                type: string
+    CaesarInput:
+      allOf:
+        - $ref: '#/components/schemas/MessageInput'
+        - type: object
+          required: [key]
+          properties:
+            key:
+              type: integer
+              description: Shift amount; positive and negative values are supported.
+    KeyedInput:
+      allOf:
+        - $ref: '#/components/schemas/MessageInput'
+        - type: object
+          required: [key]
+          properties:
+            key:
+              type: string
+              minLength: 1
+              pattern: '^[A-Z]+$'
+              description: Uppercase A-Z keyword.
+    SubstitutionInput:
+      allOf:
+        - $ref: '#/components/schemas/MessageInput'
+        - type: object
+          required: [key]
+          properties:
+            key:
+              type: string
+              minLength: 26
+              maxLength: 26
+              pattern: '^[A-Z]{26}$'
+              description: >-
+                A permutation of A-Z. Each letter must occur exactly once;
+                A maps to the first key letter, B to the second, and so on.
+    TranspositionInput:
+      allOf:
+        - $ref: '#/components/schemas/KeyedInput'
+    TranspositionDecryptInput:
+      allOf:
+        - $ref: '#/components/schemas/KeyedInput'
+        - type: object
+          properties:
+            originalLength:
+              type: integer
+              minimum: 0
+              description: Original unpadded message length, when known.
+    Result:
+      type: object
+      required: [result]
+      properties:
+        result:
+          type: string
+    CaesarCandidate:
+      type: object
+      required: [key, message]
+      properties:
+        key:
+          type: integer
+          minimum: 1
+          maximum: 25
+        message:
+          type: string
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+  responses:
+    BadRequest:
+      description: Invalid JSON, message, or cipher key
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
