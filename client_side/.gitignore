@@ -42,3 +42,5 @@ next-env.d.ts
 
 
 docs
+# allow committing the env template
+!.env.example
